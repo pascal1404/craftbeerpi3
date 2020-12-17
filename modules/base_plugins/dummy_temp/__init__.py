@@ -35,6 +35,8 @@ class DummyTempSensor(SensorActive):
         default_value='0',
         description="Dummy Min. Temperature as decimal value")
     current_temp = None
+    
+    inc_old =0.5
 
     @cbpi.action("Reset")
     def reset(self):
@@ -43,12 +45,26 @@ class DummyTempSensor(SensorActive):
         """
         self.current_temp = None
 
-    @cbpi.action("Toogle Up/Down")
-    def toogle(self):
+    @cbpi.action("Toggle Up/Down")
+    def toogle_inc(self):
         """
         toogle inc from up/down
         """
         self.inc = float(self.inc) * -1
+        
+    @cbpi.action("Toggle Hold Temp")
+    def toggle_hold(self):
+        if self.inc == 0:
+            """
+            restore old inc value
+            """
+            self.inc = self.inc_old
+        else:
+            """
+            set inc to 0 and save old Value
+            """
+            self.inc_old = self.inc
+            self.inc = 0
 
     def stop(self):
         """
