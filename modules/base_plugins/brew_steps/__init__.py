@@ -17,6 +17,7 @@ class MashStep(StepBase):
     temp = Property.Number("Temperature", configurable=True, description="Target Temperature of Mash Step")
     kettle = StepProperty.Kettle("Kettle", description="Kettle in which the mashing takes place")
     timer = Property.Number("Timer in Minutes", configurable=True, description="Timer is started when the target temperature is reached")
+    first = True
 
     def init(self):
         '''
@@ -51,6 +52,9 @@ class MashStep(StepBase):
 
         # Check if Target Temp is reached
         if self.get_kettle_temp(self.kettle) >= float(self.temp):
+            if self.first == True:
+                self.notify("Mash Temperature reached! %s C" % self.temp , "Waiting for %s Minutes." % self.timer)
+                self.first = False
             # Check if Timer is Running
             if self.is_timer_finished() is None:
                 self.start_timer(int(self.timer) * 60)
@@ -84,7 +88,8 @@ class MashInStep(StepBase):
         self.s = False
         self.set_target_temp(self.temp, self.kettle)
 
-
+    def finish(self):
+        self.set_target_temp(0, self.kettle)
 
     def execute(self):
         '''
@@ -103,6 +108,7 @@ class MashInStep(StepBase):
 class ChilStep(StepBase):
 
     timer = Property.Number("Timer in Minutes", configurable=True, default_value=0, description="Timer is started immediately")
+    first = True
 
     @cbpi.action("Stat Timer")
     def start(self):
@@ -117,6 +123,9 @@ class ChilStep(StepBase):
         pass
 
     def execute(self):
+        if self.first == True:
+            self.notify("ChilStep started!", "Waiting for %s Minutes." % self.timer)
+            self.first = False
         if self.is_timer_finished() is None:
             self.start_timer(int(self.timer) * 60)
 
@@ -160,16 +169,29 @@ class BoilStep(StepBase):
     temp = Property.Number("Temperature", configurable=True, default_value=100, description="Target temperature for boiling")
     kettle = StepProperty.Kettle("Kettle", description="Kettle in which the boiling step takes place")
     timer = Property.Number("Timer in Minutes", configurable=True, default_value=90, description="Timer is started when target temperature is reached")
-    hop_1 = Property.Number("Hop 1 Addition", configurable=True, description="Fist Hop alert")
-    hop_1_added = Property.Number("",default_value=None)
+    temp_diff = Property.Number("Temperature Difference", configurable=True, default_value=3, description="Difference from target temperature at which point the timer starts counting")
+    hop_1 = Property.Number("Hop 1 Addition", configurable=True, description="First Hop alert")
+    hop_1_added = Property.Number("", default_value=None)
+    hop_1_desc = Property.Text(label="Hop 1 Description", configurable=True, default_value="", description="Enter Hop 1 descriptions, like how much use and hop name.")
     hop_2 = Property.Number("Hop 2 Addition", configurable=True, description="Second Hop alert")
     hop_2_added = Property.Number("", default_value=None)
-    hop_3 = Property.Number("Hop 3 Addition", configurable=True)
-    hop_3_added = Property.Number("", default_value=None, description="Third Hop alert")
-    hop_4 = Property.Number("Hop 4 Addition", configurable=True)
-    hop_4_added = Property.Number("", default_value=None, description="Fourth Hop alert")
-    hop_5 = Property.Number("Hop 5 Addition", configurable=True)
-    hop_5_added = Property.Number("", default_value=None, description="Fives Hop alert")
+    hop_2_desc = Property.Text(label="Hop 2 Description", configurable=True, default_value="", description="Enter Hop 2 descriptions, like how much use and hop name.")
+    hop_3 = Property.Number("Hop 3 Addition", configurable=True, description="Third Hop alert")
+    hop_3_added = Property.Number("", default_value=None)
+    hop_3_desc = Property.Text(label="Hop 3 Description", configurable=True, default_value="", description="Enter Hop 3 descriptions, like how much use and hop name.")
+    hop_4 = Property.Number("Hop 4 Addition", configurable=True, description="Fourth Hop alert")
+    hop_4_added = Property.Number("", default_value=None)
+    hop_4_desc = Property.Text(label="Hop 4 Description", configurable=True, default_value="", description="Enter Hop 4 descriptions, like how much use and hop name.")
+    hop_5 = Property.Number("Hop 5 Addition", configurable=True, description="Fifth Hop alert")
+    hop_5_added = Property.Number("", default_value=None)
+    hop_5_desc = Property.Text(label="Hop 5 Description", configurable=True, default_value="", description="Enter Hop 5 descriptions, like how much use and hop name.")
+    hop_6 = Property.Number("Hop 6 Addition", configurable=True, description="Sixth Hop alert")
+    hop_6_added = Property.Number("", default_value=None)
+    hop_6_desc = Property.Text(label="Hop 6 Description", configurable=True, default_value="", description="Enter Hop 6 descriptions, like how much use and hop name.")
+    hop_7 = Property.Number("Hop 7 Addition", configurable=True, description="Seventh Hop alert")
+    hop_7_added = Property.Number("", default_value=None)
+    hop_7_desc = Property.Text(label="Hop 7 Description", configurable=True, default_value="", description="Enter Hop 7 descriptions, like how much use and hop name.")
+    first = True
 
     def init(self):
         '''
@@ -201,11 +223,12 @@ class BoilStep(StepBase):
 
 
     def check_hop_timer(self, number, value):
-        if isinstance(value, int) and \
-            self.__getattribute__("hop_%s_added" % number) is not True and time.time() > (
-            self.timer_end - (int(self.timer) * 60 - int(value) * 60)):
-            self.__setattr__("hop_%s_added" % number, True)
-            self.notify("Hop Alert", "Please add Hop %s" % number, timeout=None)
+        try:
+            if self.__getattribute__("hop_%s_added" % number) is not True and self.timer_end - int(time.time()) <= (int(value) * 60):
+                self.__setattr__("hop_%s_added" % number, True)
+                self.notify("Hop Alert", "Adding Hops #%s: %s" % (number, self.__getattribute__("hop_%s_desc" % number)), timeout=10000)
+        except TypeError:
+            pass
 
     def execute(self):
         '''
@@ -213,16 +236,24 @@ class BoilStep(StepBase):
         :return:
         '''
         # Check if Target Temp is reached
-        if self.get_kettle_temp(self.kettle) >= float(self.temp):
+        if self.get_kettle_temp(self.kettle) >= (float(self.temp) - float(self.temp_diff)):
+            if self.first == True:
+                self.notify("Boil Temperature reached! %s C" % self.temp , "Boiling for %s Minutes." % self.timer)
+                self.first = False
             # Check if Timer is Running
             if self.is_timer_finished() is None:
                 self.start_timer(int(self.timer) * 60)
-            else:
-                self.check_hop_timer(1, self.hop_1)
-                self.check_hop_timer(2, self.hop_2)
-                self.check_hop_timer(3, self.hop_3)
-                self.check_hop_timer(4, self.hop_4)
-                self.check_hop_timer(5, self.hop_5)
+
+        # Check if hop time reached
+        if self.is_timer_finished() == False:
+            self.check_hop_timer(1, self.hop_1)
+            self.check_hop_timer(2, self.hop_2)
+            self.check_hop_timer(3, self.hop_3)
+            self.check_hop_timer(4, self.hop_4)
+            self.check_hop_timer(5, self.hop_5)
+            self.check_hop_timer(6, self.hop_6)
+            self.check_hop_timer(7, self.hop_7)
+
         # Check if timer finished and go to next step
         if self.is_timer_finished() == True:
             self.notify("Boil Step Completed!", "Starting the next step", timeout=None)
