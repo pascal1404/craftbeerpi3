@@ -26,18 +26,29 @@ class GPIOSimple(ActorBase):
                                26, 27
                            ],
                            description="GPIO to which the actor is connected")
+    mode = Property.Select("Mode", options=["regular", "inverse"], 
+                           description="regular means 'ON' is GPIO 'High' and inverse means 'ON' is GPIO 'Low'")
 
     def init(self):
         GPIO.setup(int(self.gpio), GPIO.OUT)
-        GPIO.output(int(self.gpio), 0)
+        if self.mode == "regular":
+            GPIO.output(int(self.gpio), 0)
+        else:
+            GPIO.output(int(self.gpio), 1)
 
     def on(self, power=0):
         print(("GPIO ON %s" % str(self.gpio)))
-        GPIO.output(int(self.gpio), 1)
+        if self.mode == "regular":
+            GPIO.output(int(self.gpio), 1)
+        else:
+            GPIO.output(int(self.gpio), 0)
 
     def off(self):
         print("GPIO OFF")
-        GPIO.output(int(self.gpio), 0)
+        if self.mode == "regular":
+            GPIO.output(int(self.gpio), 0)
+        else:
+            GPIO.output(int(self.gpio), 1)
 
 
 @cbpi.actor
